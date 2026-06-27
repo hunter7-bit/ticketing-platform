@@ -1,0 +1,8 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* We can add a simple dark mode background to make the app look sleek right away */
+body {
+  @apply bg-gray-900 text-white;
+}

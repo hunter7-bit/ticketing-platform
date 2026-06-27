@@ -1,0 +1,55 @@
+# ---------------------------------------------------------
+# FASTAPI ENTRYPOINT
+# ---------------------------------------------------------
+# This is the file that Uvicorn (our web server) runs. 
+# It glues all our disparate routes and middleware together.
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+# Import our individual feature routers
+from app.api.v1.endpoints import auth, tickets, events
+
+app = FastAPI(
+    title="High-Concurrency Ticketing API",
+    description="A ticketing app with row-level locking.",
+    version="1.0.0",
+)
+
+# ---------------------------------------------------------
+# CORS MIDDLEWARE
+# ---------------------------------------------------------
+# This allows our future React/Tailwind frontend to communicate with this API.
+origins = [
+    "http://localhost:3000",  # Standard React/Next.js local port
+    "http://localhost:5173",  # Standard Vite (React) local port
+    # "https://www.yourproductiondomain.com" # We would add this before launching
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins = origins,
+    allow_credentials = True,
+    allow_methods = ["*"],
+    allow_headers = ["*"],
+)
+
+# ---------------------------------------------------------
+# ROUTER REGISTRATION
+# ---------------------------------------------------------
+# We attach our auth router and give it a prefix so every URL 
+# automatically starts with /api/v1/auth/...
+app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
+app.include_router(tickets.router, prefix="/api/v1/tickets", tags=["Tickets"])
+app.include_router(events.router, prefix="/api/v1/events", tags=["Events"])
+# ---------------------------------------------------------
+# HEALTH CHECK
+# ---------------------------------------------------------
+@app.get("/health", tags=["System"])
+async def health_check():
+    """
+    Cloud providers like AWS or Kubernetes 
+    will ping this endpoint every 10 seconds. If it stops returning "healthy", 
+    the cloud automatically kills the crashed server and starts a fresh one.
+    """
+    return {"status": "healthy", "version": "1.0.0"}

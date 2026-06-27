@@ -1,0 +1,17 @@
+Python
+
+pycache/
+*.py[cod]
+.env
+.venv/
+
+Node
+
+node_modules/
+dist/
+dist-ssr/
+
+Docker/Data
+
+postgres_data/
+*.log

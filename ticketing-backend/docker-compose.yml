@@ -1,0 +1,56 @@
+# This file defines our entire multi-container architecture.
+
+services:
+  # 1. THE MAIN API SERVER
+  api:
+    build: . # Tells Docker to use the Dockerfile in this directory
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000" # Maps port 8000 on your laptop to port 8000 in the container
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      # Notice the host is "postgres" and "redis" - Docker creates an internal DNS network!
+      - DATABASE_URL=postgresql+asyncpg://admin:supersecret@postgres:5432/ticketing_db
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - .:/app
+  # 2. THE BACKGROUND WORKER
+  worker:
+    build: . # Reuses the exact same Python image as the API!
+    command: python -m app.workers.lock_manager
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://admin:supersecret@postgres:5432/ticketing_db
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - .:/app
+    
+  # 3. THE POSTGRESQL DATABASE
+  postgres:
+    image: postgres:15-alpine # Alpine means it's a super tiny, fast Linux version
+    restart: always
+    environment:
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=supersecret
+      - POSTGRES_DB=ticketing_db
+    ports:
+      - "5432:5432"
+    volumes:
+      # This is crucial! It saves the database data to your laptop's hard drive 
+      # so it isn't deleted when the container shuts down.
+      - postgres_data:/var/lib/postgresql/data
+
+  # 4. THE REDIS CACHE & MESSAGE BROKER
+  redis:
+    image: redis:7-alpine
+    restart: always
+    ports:
+      - "6379:6379"
+
+# Define the persistent storage volume for Postgres
+volumes:
+  postgres_data:
