@@ -11,6 +11,7 @@ import redis.asyncio as redis
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import text
+import urllib.request
 
 # --- Configuration ---
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
@@ -36,7 +37,18 @@ async def unlock_ticket_in_db(ticket_id: str):
         await session.execute(query,{"ticket_id":ticket_id})
         await session.commit()
         print(f"[SUCCESS] Ticket {ticket_id} lock expired. Reverted to AVAILABLE.")
-    
+
+        # Tell the main API to broadcast the update to all connected browsers!
+        try:
+            def send_ping():
+                # We use the internal Docker network name 'api'
+                req = urllib.request.Request('http://api:8000/api/v1/ws/trigger-refresh', method='POST')
+                urllib.request.urlopen(req, timeout=2)
+            
+            # Run the blocking HTTP request in a background thread so it doesn't freeze our async worker
+            await asyncio.to_thread(send_ping)
+        except Exception as e:
+            print(f"[WARNING] Could not trigger WebSocket refresh: {e}")
 
 async def listen_for_expirations():
         """Subscribes to Redis Keyspace Notifications for expired keys."""

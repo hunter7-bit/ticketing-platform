@@ -13,6 +13,7 @@ from app.db.session import get_db
 from app.models.ticket import Ticket
 from app.schemas.ticket import ReserveRequest, ReserveResponse,CheckoutRequest, CheckoutResponse
 from app.api.dependencies import get_current_user
+from app.api.v1.endpoints.websockets import manager
 
 router = APIRouter()
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
@@ -55,17 +56,22 @@ async def reserve_ticket(
 
     await db.commit()
 
-    # 3. START THE REDIS 10-MINUTE TIMER
+    # 3. START THE REDIS 15 Seconds TIMER
     # It sets a key like "ticket:lock:123" with a TTL (Time-To-Live) of 600 seconds.
     redis_client = await redis.from_url(REDIS_URL)
     await redis_client.setex(f"ticket:lock:{ticket.id}", 15, "locked")
     await redis_client.aclose() # Gracefully close the Redis connection
 
+    # --- NEW: BROADCAST TO ALL USERS ---
+    # Tell everyone's browser to instantly refresh their remaining ticket counts!
+    await manager.broadcast("refresh_events")
+
     return ReserveResponse(
-        message="Ticket reserved! You have 10 minutes to complete checkout.",
+        message="Ticket reserved! You have 15 seconds to complete checkout.",
         ticket_id=ticket.id,
         expires_at=expires_at
     )
+
 
 @router.post("/checkout", response_model=CheckoutResponse)
 async def checkout_ticket(
@@ -96,6 +102,10 @@ async def checkout_ticket(
     # 2. Complete the purchase
     ticket.status = "SOLD"
     await db.commit()
+
+    # --- NEW: BROADCAST TO ALL USERS ---
+    await manager.broadcast("refresh_events")
+
 
     return CheckoutResponse(
         message="Payment successful! Enjoy the festival.",

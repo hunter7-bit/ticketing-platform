@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 # Import our individual feature routers
-from app.api.v1.endpoints import auth, tickets, events
+from app.api.v1.endpoints import auth, tickets, events, websockets
 
 app = FastAPI(
     title="High-Concurrency Ticketing API",
@@ -23,7 +23,7 @@ app = FastAPI(
 origins = [
     "http://localhost:3000",  # Standard React/Next.js local port
     "http://localhost:5173",  # Standard Vite (React) local port
-    # "https://www.yourproductiondomain.com" # We would add this before launching
+    # "https://www.yourproductiondomain.com" # Will add this before launching
 ]
 
 app.add_middleware(
@@ -42,6 +42,9 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(tickets.router, prefix="/api/v1/tickets", tags=["Tickets"])
 app.include_router(events.router, prefix="/api/v1/events", tags=["Events"])
+
+# ADD WEBSOCKETS ROUTER (Notice it has no prefix, so it sits at /api/v1/ws)
+app.include_router(websockets.router, prefix="/api/v1", tags=["WebSockets"])
 # ---------------------------------------------------------
 # HEALTH CHECK
 # ---------------------------------------------------------

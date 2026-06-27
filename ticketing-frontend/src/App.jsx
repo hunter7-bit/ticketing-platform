@@ -27,20 +27,49 @@ export default function App() {
   const [checkoutStatus, setCheckoutStatus] = useState('idle'); // idle, processing, success, error
   const [checkoutMessage, setCheckoutMessage] = useState(null);
 
-  // --- INITIAL DATA FETCH ---
+  // --- 1. INITIAL DATA FETCH FUNCTION ---
+  const fetchEvents = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/events/');
+      const data = await response.json();
+      setEvents(data);
+      
+      // NEW FIX: If the modal is currently open, update its data with the fresh fetch!
+      setSelectedEvent(currentSelected => {
+        if (!currentSelected) return null;
+        // Find the fresh version of this exact event from the new data
+        return data.find(e => e.id === currentSelected.id) || currentSelected;
+      });
+      
+    } catch (error) {
+      console.error("Failed to load events:", error);
+    } finally {
+      setLoadingEvents(false);
+    }
+  };
+
+  // Run once on load
   useEffect(() => {
-    const fetchEvents = async () => {
-      try {
-        const response = await fetch('http://localhost:8000/api/v1/events/');
-        const data = await response.json();
-        setEvents(data);
-      } catch (error) {
-        console.error("Failed to load events:", error);
-      } finally {
-        setLoadingEvents(false);
+    fetchEvents();
+  }, []);
+
+  // --- 2. WEBSOCKET LISTENER ---
+  // Connect to the backend and listen for broadcast commands
+  useEffect(() => {
+    const ws = new WebSocket('ws://localhost:8000/api/v1/ws');
+
+    ws.onopen = () => console.log("Connected to live ticket updates!");
+    
+    ws.onmessage = (event) => {
+      if (event.data === "refresh_events") {
+        console.log("Activity detected! Refreshing ticket counts...");
+        // Re-fetch the events from the server to get the latest accurate numbers!
+        fetchEvents();
       }
     };
-    fetchEvents();
+
+    // Cleanup connection if the user closes the page
+    return () => ws.close();
   }, []);
 
   // --- AUTHENTICATION ---
@@ -232,7 +261,8 @@ export default function App() {
 
             <div className="p-6">
               {/* STEP 1: CHOOSE A TIER */}
-              {!reservation && checkoutStatus === 'idle' && (
+              {/* THE FIX: We now allow Step 1 to render if the status is 'error' so you can see the message! */}
+              {!reservation && (checkoutStatus === 'idle' || checkoutStatus === 'error') && (
                 <div className="space-y-4">
                   <p className="text-sm text-slate-400 mb-4">Select your preferred ticket type below.</p>
                   
@@ -262,6 +292,7 @@ export default function App() {
                     </div>
                   ))}
                   
+                  {/* The error message that was hiding from us! */}
                   {checkoutStatus === 'error' && (
                     <div className="mt-4 p-3 bg-red-900/30 border border-red-800 rounded-lg flex gap-2 text-red-400 text-sm">
                       <AlertCircle size={18} /> {checkoutMessage}
