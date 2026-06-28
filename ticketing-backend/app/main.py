@@ -4,11 +4,44 @@
 # This is the file that Uvicorn (our web server) runs. 
 # It glues all our disparate routes and middleware together.
 
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+# Import database engine and Base to create tables on startup
+from app.db.session import engine, Base
+import app.models
+
 # Import our individual feature routers
 from app.api.v1.endpoints import auth, tickets, events, websockets
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # --- STARTUP LOGIC ---
+    import logging
+    logger = logging.getLogger("uvicorn.error")
+    logger.info("🚀 Initiating database startup sequence...")
+    
+    # Explicitly import models inside the function to absolutely guarantee 
+    # SQLAlchemy registers them in Base.metadata before create_all is called.
+    from app.models.user import User
+    from app.models.event import Event, TicketTier
+    from app.models.ticket import Ticket
+    from app.db.session import engine, Base
+    
+    try:
+        async with engine.begin() as conn:
+            logger.info("📦 Creating missing database tables...")
+            await conn.run_sync(Base.metadata.create_all)
+            logger.info("✅ Database tables verified/created successfully!")
+    except Exception as e:
+        logger.error(f"❌ Error creating tables: {e}")
+        
+    yield
+    
+    # --- SHUTDOWN LOGIC ---
+    logger.info("🛑 API Shutting down...")
+
 
 app = FastAPI(
     title="High-Concurrency Ticketing API",
