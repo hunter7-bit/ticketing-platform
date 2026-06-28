@@ -14,7 +14,20 @@ from app.models.event import Event, TicketTier
 from app.models.ticket import Ticket
 from app.core.security import get_password_hash
 
+from app.db.session import AsyncSessionLocal, engine, Base  
+from app.models.user import User
+from app.models.event import Event, TicketTier
+from app.models.ticket import Ticket
+
 async def seed_database():
+    # CREATE ALL TABLES FIRST
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    print("[OK] Schema created.")
+
+    async with AsyncSessionLocal() as session:
+        print("Starting database seeding...")
+
     # Open an asynchronous connection to Postgres
     async with AsyncSessionLocal() as session:
         print("Starting database seeding...")
